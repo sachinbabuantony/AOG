@@ -137,8 +137,8 @@ def index():
                     <thead>
                         <tr>
                             <th>Aircraft Registration</th>
-                            <th>Actual Takeoff</th>
-                            <th>Actual Landing</th>
+                            <th>Latest Takeoff</th>
+                            <th>Latest Landing</th>
                             <th>AOG Till Date (Hours)</th>
                         </tr>
                     </thead>
