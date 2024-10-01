@@ -21,6 +21,7 @@ def index():
                 <head>
                     <title>Error</title>
                     <style>
+                        /* (Existing CSS styles) */
                         body {
                             font-family: Arial, sans-serif;
                             text-align: center;
@@ -121,10 +122,42 @@ def index():
                 # Round the AOG_Till_Date_Hours to 2 decimal places
                 latest_takeoff_df['AOG_Till_Date_Hours'] = latest_takeoff_df['AOG_Till_Date_Hours'].round(2)
 
-                # Convert DataFrame to HTML with better styling
-                html_table = latest_takeoff_df.to_html(index=False, classes='dataframe', border=0, justify='center')
+                # Rename the column for generality
+                latest_takeoff_df.rename(columns={'AOG_Till_Date_Hours': 'AOG_Till_Date'}, inplace=True)
 
-                # HTML page with styling
+                # Convert DataFrame to HTML with better styling and add data-hour attribute for conversion
+                # Add a data-hour attribute to store the hours value for each cell
+                def format_aog_till_date(row):
+                    hours = row['AOG_Till_Date']
+                    return f'<td data-hour="{hours}">{hours}</td>'
+
+                # Build the HTML table manually to add data attributes
+                html_table = '''
+                <table id="aogTable" class="dataframe">
+                    <thead>
+                        <tr>
+                            <th>Aircraft Registration</th>
+                            <th>Actual Takeoff</th>
+                            <th>Actual Landing</th>
+                            <th>AOG Till Date (Hours)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                '''
+                for _, row in latest_takeoff_df.iterrows():
+                    html_table += '<tr>'
+                    html_table += f'<td>{row["aircraftRegistration"]}</td>'
+                    html_table += f'<td>{row["actualTakeoff"]}</td>'
+                    html_table += f'<td>{row["actualLanding"]}</td>'
+                    # Add data-hour attribute for AOG_Till_Date
+                    html_table += f'<td data-hour="{row["AOG_Till_Date"]}">{row["AOG_Till_Date"]}</td>'
+                    html_table += '</tr>'
+                html_table += '''
+                    </tbody>
+                </table>
+                '''
+
+                # HTML page with styling and toggle button
                 return f'''
                 <!DOCTYPE html>
                 <html>
@@ -175,7 +208,7 @@ def index():
                         table.dataframe tr:nth-child(even) {{
                             background-color: #f9f9f9;
                         }}
-                        a.button {{
+                        a.button, button.toggle-button {{
                             display: inline-block;
                             margin-top: 30px;
                             padding: 10px 20px;
@@ -183,11 +216,17 @@ def index():
                             color: white;
                             text-decoration: none;
                             font-weight: bold;
+                            border: none;
                             border-radius: 5px;
                             transition: background-color 0.3s ease;
+                            cursor: pointer;
+                            font-size: 1rem;
                         }}
-                        a.button:hover {{
+                        a.button:hover, button.toggle-button:hover {{
                             background-color: #2980b9;
+                        }}
+                        .button-container {{
+                            margin-top: 20px;
                         }}
                         @media (max-width: 768px) {{
                             table.dataframe {{
@@ -207,8 +246,43 @@ def index():
                         <img src="/static/airline_economics_logo.jpg" alt="Logo">
                         <h1>AOG Results</h1>
                         {html_table}
+                        <div class="button-container">
+                            <button class="toggle-button" id="toggleButton">Show in Days</button>
+                        </div>
                         <a href="/" class="button">Back to Input Form</a>
                     </div>
+                    <script>
+                        const toggleButton = document.getElementById('toggleButton');
+                        let showingHours = true;
+
+                        toggleButton.addEventListener('click', function() {{
+                            const table = document.getElementById('aogTable');
+                            const headers = table.querySelectorAll('th');
+                            const aogHeader = headers[3];
+                            const cells = table.querySelectorAll('td[data-hour]');
+
+                            if (showingHours) {{
+                                // Switch to Days
+                                aogHeader.textContent = 'AOG Till Date (Days)';
+                                cells.forEach(cell => {{
+                                    const hours = parseFloat(cell.getAttribute('data-hour'));
+                                    const days = (hours / 24).toFixed(2);
+                                    cell.textContent = days;
+                                }});
+                                toggleButton.textContent = 'Show in Hours';
+                                showingHours = false;
+                            }} else {{
+                                // Switch to Hours
+                                aogHeader.textContent = 'AOG Till Date (Hours)';
+                                cells.forEach(cell => {{
+                                    const hours = parseFloat(cell.getAttribute('data-hour'));
+                                    cell.textContent = hours;
+                                }});
+                                toggleButton.textContent = 'Show in Days';
+                                showingHours = true;
+                            }}
+                        }});
+                    </script>
                 </body>
                 </html>
                 '''
@@ -219,6 +293,7 @@ def index():
                 <head>
                     <title>No Data Found</title>
                     <style>
+                        /* (Existing CSS styles) */
                         body {
                             font-family: Arial, sans-serif;
                             text-align: center;
@@ -280,6 +355,7 @@ def index():
                 <head>
                     <title>Error</title>
                     <style>
+                        /* (Existing CSS styles) */
                         body {{
                             font-family: Arial, sans-serif;
                             text-align: center;
