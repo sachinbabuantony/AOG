@@ -6,7 +6,7 @@ import pytz
 
 app = Flask(__name__)
 
-API_TOKEN = '0cc8b6e2d834ea6728044e5f3408a6359b52aa8c'  # Replace with your actual API token
+API_TOKEN = 'ba8d247c8d46b8afffbfbda829cba23257db6eb9'  # Replace with your actual API token
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -21,6 +21,7 @@ def index():
                 <head>
                     <title>Error</title>
                     <style>
+                        /* (Existing CSS styles) */
                         body {
                             font-family: Arial, sans-serif;
                             text-align: center;
@@ -59,7 +60,7 @@ def index():
         current_time = datetime.utcnow()
 
         # Get the time 7 days ago from now
-        seven_days_ago = current_time - timedelta(days=30)
+        seven_days_ago = current_time - timedelta(days=7)
 
         # Convert to ISO 8601 format (used in APIs)
         to_date = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -113,20 +114,24 @@ def index():
                     takeoff = row['actualTakeoff']
                     landing = row['actualLanding']
 
-                    if pd.isnull(takeoff) or pd.isnull(landing):
-                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Hours'] = 'No data available in last 7 days'
-                    elif pd.notnull(takeoff) and pd.isnull(landing):
+                    if pd.notnull(takeoff) and pd.isnull(landing):
                         latest_takeoff_df.at[idx, 'AOG_Till_Date_Hours'] = 0
                     elif pd.notnull(takeoff) and pd.notnull(landing):
                         latest_takeoff_df.at[idx, 'AOG_Till_Date_Hours'] = (current_time_uk - landing).total_seconds() / 3600
 
-                # Round the AOG_Till_Date_Hours to 2 decimal places if it's numeric
-                latest_takeoff_df['AOG_Till_Date_Hours'] = pd.to_numeric(latest_takeoff_df['AOG_Till_Date_Hours'], errors='coerce').round(2)
+                # Round the AOG_Till_Date_Hours to 2 decimal places
+                latest_takeoff_df['AOG_Till_Date_Hours'] = latest_takeoff_df['AOG_Till_Date_Hours'].round(2)
 
                 # Rename the column for generality
                 latest_takeoff_df.rename(columns={'AOG_Till_Date_Hours': 'AOG_Till_Date'}, inplace=True)
 
                 # Convert DataFrame to HTML with better styling and add data-hour attribute for conversion
+                # Add a data-hour attribute to store the hours value for each cell
+                def format_aog_till_date(row):
+                    hours = row['AOG_Till_Date']
+                    return f'<td data-hour="{hours}">{hours}</td>'
+
+                # Build the HTML table manually to add data attributes
                 html_table = '''
                 <table id="aogTable" class="dataframe">
                     <thead>
@@ -145,8 +150,7 @@ def index():
                     html_table += f'<td>{row["actualTakeoff"]}</td>'
                     html_table += f'<td>{row["actualLanding"]}</td>'
                     # Add data-hour attribute for AOG_Till_Date
-                    aog_value = row["AOG_Till_Date"] if isinstance(row["AOG_Till_Date"], str) else row["AOG_Till_Date"]
-                    html_table += f'<td data-hour="{aog_value}">{aog_value}</td>'
+                    html_table += f'<td data-hour="{row["AOG_Till_Date"]}">{row["AOG_Till_Date"]}</td>'
                     html_table += '</tr>'
                 html_table += '''
                     </tbody>
@@ -289,6 +293,7 @@ def index():
                 <head>
                     <title>No Data Found</title>
                     <style>
+                        /* (Existing CSS styles) */
                         body {
                             font-family: Arial, sans-serif;
                             text-align: center;
@@ -350,6 +355,7 @@ def index():
                 <head>
                     <title>Error</title>
                     <style>
+                        /* (Existing CSS styles) */
                         body {{
                             font-family: Arial, sans-serif;
                             text-align: center;
@@ -450,6 +456,12 @@ def index():
                     display: flex;
                     flex-direction: column;
                     align-items: center;
+                }
+                label {
+                    font-size: 1.2rem;
+                    margin-bottom: 10px;
+                    width: 100%;
+                    text-align: left;
                 }
                 input[type="text"] {
                     padding: 12px;
