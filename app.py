@@ -95,7 +95,7 @@ def index():
                 df = pd.json_normalize(flight_data['flights'])
 
                 # Select columns
-                selected_columns = ['aircraftRegistration', 'actualTakeoff', 'actualLanding']
+                selected_columns = ['aircraftRegistration', 'airlineName', 'actualTakeoff', 'actualLanding', 'aircraftTypeDescription', 'status']
                 selected_df = df[selected_columns]
 
                 # Group by aircraftRegistration and get the latest actualTakeoff
@@ -137,8 +137,9 @@ def index():
                     <thead>
                         <tr>
                             <th>Aircraft Registration</th>
-                            <th>Latest Takeoff</th>
-                            <th>Latest Landing</th>
+                            <th>Airline Name</th>
+                            <th>Aircraft Type</th>
+                            <th>Status</th>
                             <th>AOG Till Date (Hours)</th>
                         </tr>
                     </thead>
@@ -147,8 +148,9 @@ def index():
                 for _, row in latest_takeoff_df.iterrows():
                     html_table += '<tr>'
                     html_table += f'<td>{row["aircraftRegistration"]}</td>'
-                    html_table += f'<td>{row["actualTakeoff"]}</td>'
-                    html_table += f'<td>{row["actualLanding"]}</td>'
+                    html_table += f'<td>{row["airlineName"]}</td>'
+                    html_table += f'<td>{row["aircraftTypeDescription"]}</td>'
+                    html_table += f'<td>{row["status"]}</td>'
                     # Add data-hour attribute for AOG_Till_Date
                     aog_value = row["AOG_Till_Date"] if isinstance(row["AOG_Till_Date"], str) else row["AOG_Till_Date"]
                     html_table += f'<td data-hour="{aog_value}">{aog_value}</td>'
@@ -259,7 +261,7 @@ def index():
                         toggleButton.addEventListener('click', function() {{
                             const table = document.getElementById('aogTable');
                             const headers = table.querySelectorAll('th');
-                            const aogHeader = headers[3];
+                            const aogHeader = headers[4];
                             const cells = table.querySelectorAll('td[data-hour]');
 
                             if (showingHours) {{
