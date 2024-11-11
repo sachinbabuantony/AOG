@@ -6,15 +6,15 @@ import pytz
 
 app = Flask(__name__)
 
-API_TOKEN = '0cc8b6e2d834ea6728044e5f3408a6359b52aa8c'  # Replace with your actual API token
+API_TOKEN = 'f817516b1241f95db82006cd603ee62dd50732b1'  # Replace with your actual API token
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        registrations_input = request.form.get('registrations', '')
-        registrations = [reg.strip() for reg in registrations_input.split(',') if reg.strip()]
+        serial_numbers_input = request.form.get('serialNumbers', '')
+        serial_numbers = [sn.strip() for sn in serial_numbers_input.split(',') if sn.strip()]
         
-        if not registrations:
+        if not serial_numbers:
             return '''
                 <!DOCTYPE html>
                 <html>
@@ -49,7 +49,7 @@ def index():
                 </head>
                 <body>
                     <img src="/static/airline_economics_logo.jpg" alt="Logo">
-                    <h1>Please enter at least one aircraft registration.</h1>
+                    <h1>Please enter at least one aircraft serial number.</h1>
                     <a href="/">Back to Input Form</a>
                 </body>
                 </html>
@@ -57,115 +57,160 @@ def index():
         
         # Get the current UTC time
         current_time = datetime.utcnow()
-
+    
         # Get the time 7 days ago from now
-        seven_days_ago = current_time - timedelta(days=7)
-
+        seven_days_ago = current_time - timedelta(days=4)
+    
         # Convert to ISO 8601 format (used in APIs)
         to_date = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
         from_date = seven_days_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        # Calculate the page size (1 + total number of registrations)
-        page_size = 3 + len(registrations)
-
+    
+        # Calculate the page size (1 + total number of serial numbers)
+        page_size = len(serial_numbers)
+    
         # Adjusted payload with dynamic dates and pageSize
         payload = {
             "pageSize": page_size,
             "page": 1,
             "fromDate": from_date,
             "toDate": to_date,
-            "registrations": registrations
+            "serialNumbers": serial_numbers,
+            "aircraftClasses": ["AIRLINER"]
         }
-
+    
         # Headers
         headers = {
             'Authorization': f'Bearer {API_TOKEN}',
             'Content-Type': 'application/json'
         }
-
+    
         # API URL
         url = 'https://api.radarbox.com/v2/flights/search'
-
+    
         # Fetch data
         response = requests.post(url, headers=headers, json=payload)
-
+    
         if response.status_code == 200:
             flight_data = response.json()
             if 'flights' in flight_data and flight_data['flights']:
                 df = pd.json_normalize(flight_data['flights'])
-
+    
                 # Select columns
-                selected_columns = ['aircraftRegistration', 'airlineName', 'actualTakeoff', 'actualLanding', 'aircraftTypeDescription', 'status']
-                selected_df = df[selected_columns]
+                selected_columns = ['aircraftSerialNumber', 'aircraftRegistration', 'airlineName', 'actualTakeoff', 'actualLanding', 'aircraftTypeDescription', 'status', 'arrAirportCity', 'depAirportName']
+                selected_df = df.reindex(columns=selected_columns)
 
-                # Group by aircraftRegistration and get the latest actualTakeoff
-                latest_takeoff_df = selected_df.loc[selected_df.groupby('aircraftRegistration')['actualTakeoff'].idxmax()]
+                # Get all rows where 'status' is 'IN_FLIGHT'
+                inflight_df = selected_df[selected_df['status'] == 'IN_FLIGHT']
 
-                # Convert to datetime
+                # Get aircraftSerialNumbers that are 'IN_FLIGHT'
+                inflight_serials = inflight_df['aircraftSerialNumber'].unique()
+
+                # For aircraft not in 'IN_FLIGHT', get the latest 'actualTakeoff' per 'aircraftSerialNumber'
+                not_inflight_df = selected_df[~selected_df['aircraftSerialNumber'].isin(inflight_serials)]
+                if not not_inflight_df.empty:
+                    # Drop rows with NaN values in 'actualTakeoff' before grouping
+                    not_inflight_df = not_inflight_df.dropna(subset=['actualTakeoff']) 
+                    latest_not_inflight_df = not_inflight_df.loc[
+                        not_inflight_df.groupby('aircraftSerialNumber')['actualTakeoff'].idxmax()
+                    ]
+                    # Combine inflight_df and latest_not_inflight_df
+                    latest_takeoff_df = pd.concat([inflight_df, latest_not_inflight_df])
+                else:
+                    latest_takeoff_df = inflight_df
+    
+                # Group by aircraftSerialNumber and get the latest actualTakeoff
+                if (selected_df['status'] == 'IN_FLIGHT').any():
+                    # Get all rows where 'status' is 'IN_FLIGHT'
+                    latest_takeoff_df = selected_df[selected_df['status'] == 'IN_FLIGHT']
+                else:
+                    # Group by 'aircraftSerialNumber' and get the row with the latest 'actualTakeoff' time
+                    latest_takeoff_df = selected_df.loc[
+                        selected_df.groupby('aircraftSerialNumber')['actualTakeoff'].idxmax()
+                    ]
+    
+                latest_takeoff_df = latest_takeoff_df.copy()
+
+                # Convert actualTakeoff and actualLanding to datetime format (if not already done)
                 latest_takeoff_df['actualTakeoff'] = pd.to_datetime(latest_takeoff_df['actualTakeoff'], errors='coerce')
                 latest_takeoff_df['actualLanding'] = pd.to_datetime(latest_takeoff_df['actualLanding'], errors='coerce')
 
-                # Calculate AOG_Till_Date_Hours
-                latest_takeoff_df['AOG_Till_Date_Hours'] = None
-
-                uk_tz = pytz.timezone('Europe/London')
+                # Create a new column to store AOG time in days
+                latest_takeoff_df['AOG_Till_Date_Days'] = None
+    
                 current_time_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
-                current_time_uk = current_time_utc.astimezone(uk_tz)
-
+    
+                # Apply logic to determine Recent Location based on status
                 for idx, row in latest_takeoff_df.iterrows():
                     takeoff = row['actualTakeoff']
                     landing = row['actualLanding']
+                    status = row['status']
+    
+                    # Determine Recent Location
+                    if status == 'LANDED':
+                        latest_takeoff_df.at[idx, 'Recent Location'] = row['arrAirportCity']
+                    elif status == 'IN_FLIGHT':
+                        latest_takeoff_df.at[idx, 'Recent Location'] = row['depAirportName']
+                    else:
+                        latest_takeoff_df.at[idx, 'Recent Location'] = 'Unknown'
+    
+                        # New Logic: If the status is 'IN_FLIGHT', AOG_Till_Date_Days is zero
+                    if status == 'IN_FLIGHT':
+                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = 0
 
-                    if pd.isnull(takeoff) or pd.isnull(landing):
-                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Hours'] = 'No data available in last 7 days'
-                    elif (current_time_uk - landing).total_seconds() / 3600 > 168:  # 7 days * 24 hours
-                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Hours'] = 'AOG > 7 days'
+                    # Existing logic
+                    # Case 1: If the flight has taken off but hasn't landed, AOG is 0
                     elif pd.notnull(takeoff) and pd.isnull(landing):
-                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Hours'] = 0
+                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = 0
+
+                    # Case 2: If the flight has both taken off and landed, calculate AOG from last landing to current time in days
                     elif pd.notnull(takeoff) and pd.notnull(landing):
-                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Hours'] = (current_time_uk - landing).total_seconds() / 3600
-
-                # Round the AOG_Till_Date_Hours to 2 decimal places if it's numeric
-                latest_takeoff_df['AOG_Till_Date_Hours'] = pd.to_numeric(latest_takeoff_df['AOG_Till_Date_Hours'], errors='coerce').round(2)
-
+                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = (current_time_utc - landing).total_seconds() / (3600 * 24)
+    
+                # Round the AOG_Till_Date_Days to 2 decimal places if it's numeric
+                latest_takeoff_df['AOG_Till_Date_Days'] = latest_takeoff_df['AOG_Till_Date_Days'].astype(float).round(2)
+    
                 # Rename the column for generality
-                latest_takeoff_df.rename(columns={'AOG_Till_Date_Hours': 'AOG_Till_Date'}, inplace=True)
-
-                # Convert DataFrame to HTML with better styling and add data-hour attribute for conversion
+                latest_takeoff_df.rename(columns={'AOG_Till_Date_Days': 'AOG_Till_Date'}, inplace=True)
+    
+                # Convert DataFrame to HTML with better styling and add data-day attribute for conversion
                 html_table = '''
                 <table id="aogTable" class="dataframe">
                     <thead>
                         <tr>
+                            <th>Aircraft Serial Number</th>
                             <th>Aircraft Registration</th>
                             <th>Airline Name</th>
                             <th>Aircraft Type</th>
                             <th>Status</th>
-                            <th>AOG Till Date (Hours)</th>
+                            <th>Recent Location</th>
+                            <th>AOG Till Date (Days)</th>
                         </tr>
                     </thead>
                     <tbody>
                 '''
                 for _, row in latest_takeoff_df.iterrows():
                     html_table += '<tr>'
+                    html_table += f'<td>{row["aircraftSerialNumber"]}</td>'
                     html_table += f'<td>{row["aircraftRegistration"]}</td>'
                     html_table += f'<td>{row["airlineName"]}</td>'
                     html_table += f'<td>{row["aircraftTypeDescription"]}</td>'
                     html_table += f'<td>{row["status"]}</td>'
-                    # Add data-hour attribute for AOG_Till_Date
-                    aog_value = row["AOG_Till_Date"] if isinstance(row["AOG_Till_Date"], str) else row["AOG_Till_Date"]
-                    html_table += f'<td data-hour="{aog_value}">{aog_value}</td>'
+                    html_table += f'<td>{row["Recent Location"]}</td>'
+                    # Add data-day attribute for AOG_Till_Date
+                    aog_value = row["AOG_Till_Date"]
+                    html_table += f'<td data-day="{aog_value}">{aog_value}</td>'
                     html_table += '</tr>'
                 html_table += '''
                     </tbody>
                 </table>
                 '''
-
+    
                 # HTML page with styling and toggle button
                 return f'''
                 <!DOCTYPE html>
                 <html>
                 <head>
-                    <title>AOG Results</title>
+                    <title>AOG Check</title>
                     <style>
                         body {{
                             font-family: Arial, sans-serif;
@@ -247,42 +292,42 @@ def index():
                 <body>
                     <div class="container">
                         <img src="/static/airline_economics_logo.jpg" alt="Logo">
-                        <h1>AOG Results</h1>
+                        <h1>AOG Check</h1>
                         {html_table}
                         <div class="button-container">
-                            <button class="toggle-button" id="toggleButton">Show in Days</button>
+                            <button class="toggle-button" id="toggleButton">Show in Hours</button>
                         </div>
                         <a href="/" class="button">Back to Input Form</a>
                     </div>
                     <script>
                         const toggleButton = document.getElementById('toggleButton');
-                        let showingHours = true;
-
+                        let showingDays = true;
+    
                         toggleButton.addEventListener('click', function() {{
                             const table = document.getElementById('aogTable');
                             const headers = table.querySelectorAll('th');
-                            const aogHeader = headers[4];
-                            const cells = table.querySelectorAll('td[data-hour]');
-
-                            if (showingHours) {{
-                                // Switch to Days
-                                aogHeader.textContent = 'AOG Till Date (Days)';
-                                cells.forEach(cell => {{
-                                    const hours = parseFloat(cell.getAttribute('data-hour'));
-                                    const days = (hours / 24).toFixed(2);
-                                    cell.textContent = days;
-                                }});
-                                toggleButton.textContent = 'Show in Hours';
-                                showingHours = false;
-                            }} else {{
+                            const aogHeader = headers[6];  // Adjusted index due to new columns
+                            const cells = table.querySelectorAll('td[data-day]');
+    
+                            if (showingDays) {{
                                 // Switch to Hours
                                 aogHeader.textContent = 'AOG Till Date (Hours)';
                                 cells.forEach(cell => {{
-                                    const hours = parseFloat(cell.getAttribute('data-hour'));
+                                    const days = parseFloat(cell.getAttribute('data-day'));
+                                    const hours = (days * 24).toFixed(2);
                                     cell.textContent = hours;
                                 }});
                                 toggleButton.textContent = 'Show in Days';
-                                showingHours = true;
+                                showingDays = false;
+                            }} else {{
+                                // Switch to Days
+                                aogHeader.textContent = 'AOG Till Date (Days)';
+                                cells.forEach(cell => {{
+                                    const days = parseFloat(cell.getAttribute('data-day'));
+                                    cell.textContent = days;
+                                }});
+                                toggleButton.textContent = 'Show in Hours';
+                                showingDays = true;
                             }}
                         }});
                     </script>
@@ -344,7 +389,7 @@ def index():
                 <body>
                     <div class="container">
                         <img src="/static/airline_economics_logo.jpg" alt="Logo">
-                        <h1>No flight data found for the provided registrations.</h1>
+                        <h1>No flight data found for the provided serial numbers.</h1>
                         <a href="/" class="button">Back to Input Form</a>
                     </div>
                 </body>
@@ -416,13 +461,13 @@ def index():
                 </body>
                 </html>
             '''
-
+    
     # HTML form with improved styling and logo
     return '''
         <!DOCTYPE html>
         <html>
         <head>
-            <title>AOG Calculator</title>
+            <title>AOG Check</title>
             <style>
                 body {
                     font-family: Arial, sans-serif;
@@ -494,9 +539,9 @@ def index():
         <body>
             <div class="container">
                 <img src="/static/airline_economics_logo.jpg" alt="Logo">
-                <h1>AOG Calculator</h1>
+                <h1>AOG Check</h1>
                 <form method="post">
-                    <input type="text" id="registrations" name="registrations" placeholder="Enter Aircraft Registrations (separated by commas)">
+                    <input type="text" id="serialNumbers" name="serialNumbers" placeholder="Enter Aircraft Serial Numbers (separated by commas)">
                     <input type="submit" value="Calculate AOG">
                 </form>
             </div>
