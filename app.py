@@ -162,6 +162,10 @@ def index():
                     elif pd.notnull(takeoff) and pd.isnull(landing):
                         latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = 0
 
+                    # Case 1: If the flight has taken off but hasn't landed, AOG is 0
+                    elif pd.isnull(takeoff) and pd.isnull(landing):
+                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = 'No Take-off Times Received'
+
                     # Case 2: If the flight has both taken off and landed, calculate AOG from last landing to current time in days
                     elif pd.notnull(takeoff) and pd.notnull(landing):
                         latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = (current_time_utc - landing).total_seconds() / (3600 * 24)
