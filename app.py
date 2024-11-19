@@ -11,10 +11,9 @@ API_TOKEN = 'f817516b1241f95db82006cd603ee62dd50732b1'  # Replace with your actu
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        serial_numbers_input = request.form.get('serialNumbers', '')
-        serial_numbers = [sn.strip() for sn in serial_numbers_input.split(',') if sn.strip()]
+        serial_number = request.form.get('serialNumber', '').strip()
         
-        if not serial_numbers:
+        if not serial_number:
             return '''
                 <!DOCTYPE html>
                 <html>
@@ -49,7 +48,7 @@ def index():
                 </head>
                 <body>
                     <img src="/static/airline_economics_logo.jpg" alt="Logo">
-                    <h1>Please enter at least one aircraft serial number.</h1>
+                    <h1>Please enter an aircraft serial number.</h1>
                     <a href="/">Back to Input Form</a>
                 </body>
                 </html>
@@ -58,23 +57,20 @@ def index():
         # Get the current UTC time
         current_time = datetime.utcnow()
     
-        # Get the time 7 days ago from now
+        # Get the time 4 days ago from now
         seven_days_ago = current_time - timedelta(days=4)
     
         # Convert to ISO 8601 format (used in APIs)
         to_date = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
         from_date = seven_days_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
     
-        # Calculate the page size (1 + total number of serial numbers)
-        page_size = len(serial_numbers)
-    
         # Adjusted payload with dynamic dates and pageSize
         payload = {
-            "pageSize": page_size,
+            "pageSize": 1,
             "page": 1,
             "fromDate": from_date,
             "toDate": to_date,
-            "serialNumbers": serial_numbers,
+            "serialNumbers": [serial_number],
             "aircraftClasses": ["AIRLINER"]
         }
     
@@ -153,7 +149,7 @@ def index():
                     else:
                         latest_takeoff_df.at[idx, 'Recent Location'] = 'Unknown'
     
-                        # New Logic: If the status is 'IN_FLIGHT', AOG_Till_Date_Days is zero
+                    # New Logic: If the status is 'IN_FLIGHT', AOG_Till_Date_Days is zero
                     if status == 'IN_FLIGHT':
                         latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = 0
 
@@ -393,7 +389,7 @@ def index():
                 <body>
                     <div class="container">
                         <img src="/static/airline_economics_logo.jpg" alt="Logo">
-                        <h1>No flight data found for the provided serial numbers.</h1>
+                        <h1>No flight data found for the provided serial number.</h1>
                         <a href="/" class="button">Back to Input Form</a>
                     </div>
                 </body>
@@ -545,7 +541,7 @@ def index():
                 <img src="/static/airline_economics_logo.jpg" alt="Logo">
                 <h1>AOG Check</h1>
                 <form method="post">
-                    <input type="text" id="serialNumbers" name="serialNumbers" placeholder="Enter Aircraft Serial Numbers (separated by commas)">
+                    <input type="text" id="serialNumber" name="serialNumber" placeholder="Enter Aircraft Serial Number">
                     <input type="submit" value="Calculate AOG">
                 </form>
             </div>
