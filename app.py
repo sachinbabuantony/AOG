@@ -6,7 +6,7 @@ import pytz
 
 app = Flask(__name__)
 
-API_TOKEN = 'f817516b1241f95db82006cd603ee62dd50732b1'  # need to remove from source code to secret vault
+API_TOKEN = 'e40e9d79b155af6f3fc39ad327b6dfad6f9ecd85'  # need to remove from source code to secret vault
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -183,7 +183,7 @@ def index():
                             <th>Aircraft Type</th>
                             <th>Status</th>
                             <th>Recent Location</th>
-                            <th>AOG Till Date (Days)</th>
+                            <th>AOG (No. of Days)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -321,7 +321,7 @@ def index():
                                 showingDays = false;
                             }} else {{
                                 // Switch to Days
-                                aogHeader.textContent = 'AOG Till Date (Days)';
+                                aogHeader.textContent = 'AOG (No. of Days)';
                                 cells.forEach(cell => {{
                                     const days = parseFloat(cell.getAttribute('data-day'));
                                     cell.textContent = days;
