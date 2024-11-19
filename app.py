@@ -6,7 +6,7 @@ import pytz
 
 app = Flask(__name__)
 
-API_TOKEN = 'f817516b1241f95db82006cd603ee62dd50732b1'  # Replace with your actual API token
+API_TOKEN = 'f817516b1241f95db82006cd603ee62dd50732b1'  # need to remove from source code to secret vault
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
