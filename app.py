@@ -6,7 +6,7 @@ import pytz
 
 app = Flask(__name__)
 
-API_TOKEN = 'f817516b1241f95db82006cd603ee62dd50732b1'  # Replace with your actual API token
+API_TOKEN = 'e40e9d79b155af6f3fc39ad327b6dfad6f9ecd85'  # Replace with your actual API token
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
