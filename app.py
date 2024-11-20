@@ -16,7 +16,7 @@ def index():
         if not serial_number:
             return '''
                 <!DOCTYPE html>
-                <html>
+                <html>  
                 <head>
                     <title>Error</title>
                     <style>
