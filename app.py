@@ -95,82 +95,52 @@ def index():
                 selected_columns = ['aircraftSerialNumber', 'aircraftRegistration', 'airlineName', 'actualTakeoff', 'actualLanding', 'aircraftTypeDescription', 'status', 'arrAirportCity', 'depAirportName']
                 selected_df = df.reindex(columns=selected_columns)
 
-                # Get all rows where 'status' is 'IN_FLIGHT'
-                inflight_df = selected_df[selected_df['status'] == 'IN_FLIGHT']
-
-                # Get aircraftSerialNumbers that are 'IN_FLIGHT'
-                inflight_serials = inflight_df['aircraftSerialNumber'].unique()
-
-                # For aircraft not in 'IN_FLIGHT', get the latest 'actualTakeoff' per 'aircraftSerialNumber'
-                not_inflight_df = selected_df[~selected_df['aircraftSerialNumber'].isin(inflight_serials)]
-                if not not_inflight_df.empty:
-                    # Drop rows with NaN values in 'actualTakeoff' before grouping
-                    not_inflight_df = not_inflight_df.dropna(subset=['actualTakeoff']) 
-                    latest_not_inflight_df = not_inflight_df.loc[
-                        not_inflight_df.groupby('aircraftSerialNumber')['actualTakeoff'].idxmax()
-                    ]
-                    # Combine inflight_df and latest_not_inflight_df
-                    latest_takeoff_df = pd.concat([inflight_df, latest_not_inflight_df])
-                else:
-                    latest_takeoff_df = inflight_df
-    
-                # Group by aircraftSerialNumber and get the latest actualTakeoff
-                if (selected_df['status'] == 'IN_FLIGHT').any():
-                    # Get all rows where 'status' is 'IN_FLIGHT'
-                    latest_takeoff_df = selected_df[selected_df['status'] == 'IN_FLIGHT']
-                else:
-                    # Group by 'aircraftSerialNumber' and get the row with the latest 'actualTakeoff' time
-                    latest_takeoff_df = selected_df.loc[
-                        selected_df.groupby('aircraftSerialNumber')['actualTakeoff'].idxmax()
-                    ]
-    
-                latest_takeoff_df = latest_takeoff_df.copy()
-
                 # Convert actualTakeoff and actualLanding to datetime format (if not already done)
-                latest_takeoff_df['actualTakeoff'] = pd.to_datetime(latest_takeoff_df['actualTakeoff'], errors='coerce')
-                latest_takeoff_df['actualLanding'] = pd.to_datetime(latest_takeoff_df['actualLanding'], errors='coerce')
+                selected_df['actualTakeoff'] = pd.to_datetime(selected_df['actualTakeoff'], errors='coerce')
+                selected_df['actualLanding'] = pd.to_datetime(selected_df['actualLanding'], errors='coerce')
 
                 # Create a new column to store AOG time in days
-                latest_takeoff_df['AOG_Till_Date_Days'] = None
+                selected_df['AOG_Till_Date_Days'] = None
     
                 current_time_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
     
                 # Apply logic to determine Recent Location based on status
-                for idx, row in latest_takeoff_df.iterrows():
+                for idx, row in selected_df.iterrows():
                     takeoff = row['actualTakeoff']
                     landing = row['actualLanding']
                     status = row['status']
     
                     # Determine Recent Location
                     if status == 'LANDED':
-                        latest_takeoff_df.at[idx, 'Recent Location'] = row['arrAirportCity']
+                        selected_df.at[idx, 'Recent Location'] = row['arrAirportCity']
                     elif status == 'IN_FLIGHT':
-                        latest_takeoff_df.at[idx, 'Recent Location'] = row['depAirportName']
+                        selected_df.at[idx, 'Recent Location'] = row['depAirportName']
                     else:
-                        latest_takeoff_df.at[idx, 'Recent Location'] = 'Unknown'
+                        selected_df.at[idx, 'Recent Location'] = 'Unknown'
     
                     # New Logic: If the status is 'IN_FLIGHT', AOG_Till_Date_Days is zero
                     if status == 'IN_FLIGHT':
-                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = 0
+                        selected_df.at[idx, 'AOG_Till_Date_Days'] = 0
 
                     # Existing logic
                     # Case 1: If the flight has taken off but hasn't landed, AOG is 0
                     elif pd.notnull(takeoff) and pd.isnull(landing):
-                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = 0
+                        selected_df.at[idx, 'AOG_Till_Date_Days'] = 0
 
                     # Case 1: If the flight has taken off but hasn't landed, AOG is 0
                     elif pd.isnull(takeoff) and pd.isnull(landing):
-                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = 'No Take-off Times Received'
+                        selected_df.at[idx, 'AOG_Till_Date_Days'] = 'No Take-off Times Received'
 
                     # Case 2: If the flight has both taken off and landed, calculate AOG from last landing to current time in days
                     elif pd.notnull(takeoff) and pd.notnull(landing):
-                        latest_takeoff_df.at[idx, 'AOG_Till_Date_Days'] = (current_time_utc - landing).total_seconds() / (3600 * 24)
+                        selected_df.at[idx, 'AOG_Till_Date_Days'] = (current_time_utc - landing).total_seconds() / (3600 * 24)
     
                 # Round the AOG_Till_Date_Days to 2 decimal places if it's numeric
-                latest_takeoff_df['AOG_Till_Date_Days'] = latest_takeoff_df['AOG_Till_Date_Days'].astype(float).round(2)
+                selected_df['AOG_Till_Date_Days'] = pd.to_numeric(selected_df['AOG_Till_Date_Days'], errors='coerce').round(2).fillna(selected_df['AOG_Till_Date_Days'])
+
     
                 # Rename the column for generality
-                latest_takeoff_df.rename(columns={'AOG_Till_Date_Days': 'AOG_Till_Date'}, inplace=True)
+                selected_df.rename(columns={'AOG_Till_Date_Days': 'AOG_Till_Date'}, inplace=True)
     
                 # Convert DataFrame to HTML with better styling and add data-day attribute for conversion
                 html_table = '''
@@ -188,7 +158,7 @@ def index():
                     </thead>
                     <tbody>
                 '''
-                for _, row in latest_takeoff_df.iterrows():
+                for _, row in selected_df.iterrows():
                     html_table += '<tr>'
                     html_table += f'<td>{row["aircraftSerialNumber"]}</td>'
                     html_table += f'<td>{row["aircraftRegistration"]}</td>'
