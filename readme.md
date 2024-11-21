@@ -1,6 +1,11 @@
 AOG Check Application:
 This is a Flask-based web application designed to calculate and display Aircraft on Ground (AOG) status for specific aircraft based on their serial numbers. It integrates with the RadarBox API to fetch flight data and provides a user-friendly interface for viewing results.
 
+How to use:
+1. Open the app 
+2. Put a Serial No. eg: 5507
+3. click calculate AOG
+
 Features:
 Input aircraft serial numbers to calculate AOG.
 Displays flight details such as:
